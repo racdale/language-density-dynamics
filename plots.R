@@ -153,8 +153,8 @@ coefs_m3$term <- factor(coefs_m3$term, levels = unique(coefs_m3$term))
 
 coef_plot_info <- ggplot(coefs_m3, aes(x = estimate, y = term)) +
 	geom_vline(xintercept = 0) + 
-	geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0.1) + 
-	geom_point(aes(shape=typ), size=2.5, color='maroon', fill='maroon') + 
+	geom_point(aes(shape=typ), size=3, color='maroon', fill='maroon', position=position_dodge(0.2)) + 
+	geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width=.2, position=position_dodge(0.4)) + 
 	theme_classic() +
 	labs(x = 'Coefficient') + 
 	theme(
@@ -225,7 +225,7 @@ coefs_m3$term <- factor(coefs_m3$term, levels = unique(coefs_m3$term))
 coef_plot_sem <- ggplot(coefs_m3, aes(x = estimate, y = term)) +
 	geom_vline(xintercept = 0) + 
 	geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0.1) + 
-	geom_point(aes(shape=typ), size=2.5, color='orange', fill='orange') + 
+	geom_point(aes(shape=typ), size=3, color='orange', fill='orange') + 
 	#geom_segment(aes(x = 0, xend = line_stop), linetype = 'dotted') + 
 	#geom_text(aes(label = statistic_text, x = position_text), vjust = 2, fontface = 'bold') + 
 	theme_classic() +
