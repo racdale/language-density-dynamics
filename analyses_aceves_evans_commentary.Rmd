@@ -1,0 +1,362 @@
+---
+title: "Analyses for Aceves and Evans Commentary"
+author: "Gary Lupyan"
+date: "2024-03-14"
+output:
+  html_document:
+    toc: yes
+  html_notebook:
+    code_folding: hide
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+```{r}
+library(lme4)
+library(tidyverse)
+library(ggplot2)
+library(haven)
+library(MuMIn)
+library(corrr)
+```
+
+Read in data
+```{r}
+step2 <- read_dta("data/step2.dta") %>% mutate(langCode = as_factor(language_cat),corpus = as_factor(corpus), fam = as_factor(fam))
+step3 <- read_dta("data/step3.dta") %>% mutate(langCode = as_factor(language_cat), fam = as_factor(fam))
+
+bibles <- read.csv("data/bibles_used_jun2019.txt") %>% 
+	mutate(compressibility = 1-I(gzip/origSize)) %>% filter(compressionLevel==1) %>% 
+	group_by(langCode,script) %>% summarize_if(is.numeric,mean,na.rm=TRUE)
+
+eth <- read.csv("data/Table_of_Languages_recoded.txt",sep="\t") %>% 
+	mutate(log_pop_eth = log10(All_Users+10),
+				 l1_prop = L1_Users/All_Users)
+```
+
+Merge Aceves & Evans's data with ethnologue (to fill in missing population numbers), and my bible dataset
+```{r}
+step2_eth <- left_join(step2,eth,by=c("langCode"="ISO_639"))
+step2_eth_bibles <- left_join(step2_eth,bibles,by=c("langCode"="langCode"))
+
+bible_sizes <- step2 %>% filter(corpus=="Bible_NT") %>% select(langCode,corpus_size)
+
+step3_eth <- left_join(step3,eth,by=c("langCode"="ISO_639"))
+step3_eth <- left_join(step3_eth,bible_sizes)
+
+step3_eth_bibles <- left_join(step3_eth,bibles,by=c("langCode"="langCode"))
+
+
+```
+
+# Predicting information density from various compressibility measures
+
+
+Some definitions
+
+_numSymbols_ = total number of symbols. A symbol is a literal or a match.
+
+_totalLiterals_ = total number of literals: numSymbols-uncompressedBytes
+
+_origSize_ : length of bible file in bytes
+
+_gzip_ : size of compressed file size compressibility
+
+_compressibility_ : `1-gzip/origSize` i.e., higher means more compressed
+
+_totalMatches_ = **percentage of uncompressed bytes that came from matches** (very narrow range.. >.95 but still quite predictive!)
+
+_avgLengthMatch_ : **average length of match** (how many bytes, on average, is a match, i.e., how long are repeated chunks of text in the corpus)
+
+_meanDistanceBackMatch_ : how far back in the text was the matched text? The farther back, the harder to compress because one runs out of dictionary entries. This has psychological relevance in the form of repetition priming... it's easier to retrieve a recently mentioned word or phrase.   
+
+
+Number of languages in these analyses with bibles
+```{r}
+step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>% select(langCode) %>% unique %>% dim
+```
+
+Number of languages in these analyses with non-na populations
+```{r}
+step2_eth_bibles %>% filter(!is.na(log_pop_eth) & grepl("Bible_NT",corpus)) %>% select(langCode) %>% unique %>% dim
+```
+
+## Show some raw correlations between density and compressibility measures 
+
+Their huffman encoding is basically size of gzip without taking into account the original size of the file... 
+(original size is important in that in the range of something like the bible corpus, longer files compress better because there are more opportunities to find more and longer matches)
+
+Note that numUniqueWords is the number of unique words in the *bible* corpus. Corpus size in this analysis is whatever corpora were used... Bibles+others.  Sizes should probably be log-transformed.
+```{r}
+#using gzip level compression
+step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>% group_by(langCode) %>%
+	mutate(log10_corpus_size = log10(corpus_size)) %>% 
+	summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	select(contains("density"),log10_corpus_size,gzip,compressibility,numUniqueWords,totalMatches,avgLengthMatch,meanDistanceBackMatch) %>% 
+	select_if(is.numeric) %>% 
+	cor(m="s",use="p")
+
+```
+
+## Predicting information density {.tabset}
+
+Ok, now let's predict information density from various things, beginning with just semantic density
+
+### Base model
+```{r}
+m0<-step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>% filter(!is.na(origSize)) %>% 
+	lmer(scale(information_density)~scale(semantic_density)+(1|langCode)+(1|fam),data=.)
+
+m0 %>% summary
+```
+
+
+
+### +numUniqueWords
+```{r}
+m1<-step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>%
+	lmer(scale(information_density)~scale(semantic_density)+scale(numUniqueWords)+(1|langCode)+(1|fam),data=.)
+
+m1 %>% summary
+
+```
+
+### +script
+```{r}
+m2a<-step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>%
+	lmer(scale(information_density)~scale(semantic_density)+script+scale(numUniqueWords)+(1|langCode)+(1|fam)+(1|script),data=.)
+
+m2a %>% summary
+```
+
+### compression measures 
+replacing numUniqueWords with the three compression measures -- totalMatches, avgLengthMatch, and  meanDistanceBackMatch --  which together fully explain (98%+) compressibility: 
+```{r}
+m2b<-step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>%
+	lmer(scale(information_density)~scale(semantic_density)+script+scale(totalMatches)+scale(avgLengthMatch)+scale(meanDistanceBackMatch)+
+			 	(1|langCode)+(1|fam)+(1|script),data=.)
+
+m2b %>% summary
+```
+
+### just latin script
+```{r}
+m3<-step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>% filter(script=="Latin") %>% 
+	lmer(scale(information_density)~scale(semantic_density)+scale(numUniqueWords)+scale(totalMatches)+scale(avgLengthMatch)+scale(meanDistanceBackMatch)+(1|fam),data=.)
+
+m3 %>% summary
+```
+
+Variance explained
+
+```{r}
+m0 %>% MuMIn::r.squaredGLMM()
+m1 %>% MuMIn::r.squaredGLMM()
+m2a %>% MuMIn::r.squaredGLMM()
+m2b %>% MuMIn::r.squaredGLMM()
+m3 %>% MuMIn::r.squaredGLMM()
+```
+
+oddly, although m2a explains more variance than m2b (.76 vs. 71), m2b wins by a lot in a likelihood ratio test.
+```{r}
+anova(m2a,m2b)
+```
+
+
+## Relationship with population {.tabset}
+
+### Base model - this is for the full sample. Not just bibles!!
+```{r}
+m2_0 <- step2_eth %>% filter(!is.na(log_pop_eth)) %>%
+	lmer(scale(information_density)~scale(semantic_density)+(1|langCode)+(1|corpus)+(1|fam),data=.)
+m2_0 %>% summary
+```
+
+### Add in population
+```{r}
+m2_1 <- step2_eth %>% lmer(scale(information_density)~scale(semantic_density)+scale(log_pop_eth)+(1|langCode)+(1|corpus)+(1|fam),data=.)
+m2_1 %>% summary
+```
+
+### Add in population:semantic density
+```{r}
+m2_2 <- step2_eth %>% lmer(scale(information_density)~scale(semantic_density)*scale(log_pop_eth)+(1|langCode)+(1|corpus)+(1|fam),data=.)
+m2_2 %>% summary
+```
+
+Variance explained
+```{r}
+m2_0 %>% MuMIn::r.squaredGLMM()
+m2_1 %>% MuMIn::r.squaredGLMM()
+m2_2 %>% MuMIn::r.squaredGLMM()
+
+```
+
+
+## Unpack the interaction for high vs. low population {.tabset}
+
+### Low pop languages
+```{r}
+step2_eth %>% filter(log_pop_eth<median(log_pop_eth,na.rm=TRUE)) %>%
+	lmer(scale(information_density)~scale(semantic_density)+(1|langCode)+(1|corpus)+(1|fam),data=.) %>% summary
+```
+
+### Higher pop languages
+```{r}
+step2_eth %>% filter(log_pop_eth>=median(log_pop_eth,na.rm=TRUE)) %>%
+	lmer(scale(information_density)~scale(semantic_density)+(1|langCode)+(1|corpus)+(1|fam),data=.) %>% summary
+```
+
+
+# Predicting communication speed using more and better measures {.tabset}
+
+## Raw correlations for Bibles (New Testament)
+```{r}
+#using gzip level compression
+step3_eth_bibles %>% group_by(langCode) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>%
+	select(contains("density"),contains("speed"),corpus_size, gzip,compressibility,numUniqueWords,totalMatches,avgLengthMatch,meanDistanceBackMatch) %>% 
+	select_if(is.numeric) %>% 
+	cor(m="s",use="p")
+
+```
+
+
+## Base model
+Just the size (in words).. sanity check. More words, slower to read.
+```{r}
+m3_0 <- step3_eth_bibles %>% group_by(langCode,script,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	filter(!is.na(log_pop_eth)) %>%
+	lmer(scale(communicative_speed)~scale(log10(corpus_size))+(1|fam),data=.)
+m3_0 %>% summary
+```
+
+## +information_density
+Sign of corpus_size is now flipped!
+So controlling for information density, more words --> *faster* reading time!?
+```{r}
+m3_1 <- step3_eth_bibles %>% group_by(langCode,script,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	filter(!is.na(log_pop_eth)) %>%
+	lmer(scale(communicative_speed)~scale(information_density)+scale(log10(corpus_size))+(1|fam),data=.)
+m3_1 %>% summary
+```
+
+## +unique words
+more unique words, slower speed.
+corpus_size drops out 
+```{r}
+m3_2 <- step3_eth_bibles %>% group_by(langCode,script,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	filter(!is.na(log_pop_eth)) %>%
+	lmer(scale(communicative_speed)~scale(information_density)+scale(numUniqueWords)+scale(log10(corpus_size))+(1|fam),data=.)
+m3_2 %>% summary
+```
+
+## +script
+Because some scripts are faster to read
+```{r}
+m3_3 <- step3_eth_bibles %>% group_by(langCode,script,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	filter(!is.na(log_pop_eth)) %>%
+	lmer(scale(communicative_speed)~scale(information_density)+scale(numUniqueWords)+scale(log10(corpus_size))+script+(1|fam),data=.)
+m3_3 %>% summary
+```
+
+
+## +population
+higher pop, faster speed
+```{r}
+m3_4 <- step3_eth_bibles %>% group_by(langCode,script,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	lmer(scale(communicative_speed)~scale(information_density)+scale(log10(corpus_size))+scale(numUniqueWords)+scale(log_pop_eth)+script+(1|fam),data=.)
+m3_4 %>% summary
+```
+
+## +population:numUnique words
+```{r}
+m3_5 <- step3_eth_bibles %>% group_by(langCode,script,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+	lmer(scale(communicative_speed)~scale(information_density)+scale(log10(corpus_size))+scale(numUniqueWords)*scale(log_pop_eth)+script+(1|fam),data=.)
+m3_5 %>% summary
+```
+
+# Variance explained for predicting speed
+
+we're up from .22 to .55... marginal R^2
+fwiw, information_density_characters is a stronger predictor than the information_density measure.. probably because it's serving as a proxy for syllabic complexity/variability which is going to affect articulation speed.
+```{r}
+
+m3_0 %>% MuMIn::r.squaredGLMM()
+m3_1 %>% MuMIn::r.squaredGLMM()
+m3_2 %>% MuMIn::r.squaredGLMM()
+m3_3 %>% MuMIn::r.squaredGLMM()
+m3_4 %>% MuMIn::r.squaredGLMM()
+m3_5 %>% MuMIn::r.squaredGLMM()
+
+```
+
+
+# Final analyses in support of the commentary
+
+## Predicting semantic density {.tabset}
+
+### From inf. density, pop, vocab size - family control 
+```{r}
+step2_eth_bibles %>%  
+	filter(corpus=="Bible_NT") %>% 
+	group_by(langCode,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+    lmer(scale(semantic_density)~scale(information_density)+scale(log_pop_eth)*scale(numUniqueWords)+(1|fam),data=.) %>% summary
+```
+
+### Sister languages only
+
+More powerful phylogenetic control
+```{r}
+step2_eth_bibles %>%  
+	filter(corpus=="Bible_NT") %>% 
+	group_by(langCode,pair) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+    lmer(scale(semantic_density)~scale(information_density)+scale(log_pop_eth)*scale(numUniqueWords)+(1|pair),data=.) %>% summary
+```
+
+
+## Predicting information density {.tabset}
+
+### From semantic density, population, and its interaction - fam only
+```{r}
+step2_eth_bibles %>%  
+	filter(corpus=="Bible_NT") %>% 
+	group_by(langCode,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+    lmer(scale(information_density)~scale(semantic_density)*scale(log_pop_eth)+(1|fam),data=.) %>% summary
+```
+
+### Sister Languages only
+```{r}
+step2_eth_bibles %>%  
+	filter(corpus=="Bible_NT") %>% 
+	group_by(langCode,pair) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+    lmer(scale(information_density)~scale(semantic_density)*scale(log_pop_eth)+(1|pair),data=.) %>% summary
+
+```
+
+### Add in numUniqueWords
+
+By Language family
+```{r}
+step2_eth_bibles %>%  
+	filter(corpus=="Bible_NT") %>% 
+	group_by(langCode,fam) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+    lmer(scale(information_density)~scale(semantic_density)*scale(log_pop_eth)+scale(numUniqueWords)+(1|fam),data=.) %>% 
+	summary
+```
+
+Sister languages only
+```{r}
+step2_eth_bibles %>%  
+	filter(corpus=="Bible_NT") %>% 
+	group_by(langCode,pair) %>% summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
+    lmer(scale(information_density)~scale(semantic_density)*scale(log_pop_eth)+scale(numUniqueWords)+(1|pair),data=.) %>% 
+	summary
+```
+
