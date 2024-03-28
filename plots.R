@@ -24,7 +24,7 @@ bibles <- read.csv("data/bibles_used_jun2019.txt") %>%
 
 eth <- read.csv("data/Table_of_Languages_recoded.txt",sep="\t") %>% 
   mutate(log_pop_eth = log10(All_Users+10),
-         l1_prop = L1_Users/All_Users)
+		l1_prop = L1_Users/All_Users)
 
 step2_eth <- left_join(step2,eth,by=c("langCode"="ISO_639"))
 
@@ -41,9 +41,9 @@ cor_mat <- step2_eth_bibles %>% filter(grepl("Bible_NT",corpus)) %>% group_by(la
 	mutate(log10_corpus_size = log10(corpus_size)) %>% 
 	summarize_if(is.numeric,mean,na.rm=TRUE) %>% 
 	select(contains("density"),
-				 log10_corpus_size,
-				 log_pop_eth, # add pop size!!!!!
-				 numUniqueWords
+		log10_corpus_size,
+		log_pop_eth, # add pop size!!!!!
+		numUniqueWords
 	) %>% 
 	select_if(is.numeric) %>% 
 	cor(m="s",use="p")
@@ -64,14 +64,15 @@ cor_frame <- cor_mat %>%
   pivot_longer(-Variable_1, names_to = 'Variable_2', values_to = 'Correlation') 
 
 cor_frame$Variable_1 <- factor(cor_frame$Variable_1, 
-															 levels = variable_order,
-															 labels = c('Semantic Density', 'Information Density',
-															 					 'Info Density Chars', 'Corpus Size (log)',
-															 					 'Population (log)', 'Num Unique Words'))
+	levels = variable_order,
+	labels = c('Semantic Density', 'Information Density',
+						 'Info Density Chars', 'Corpus Size (log)',
+						 'Population (log)', 'Num Unique Words'))
 cor_frame$Variable_2 <- factor(cor_frame$Variable_2, levels = variable_order,
-															 labels = c('Semantic Density', 'Information Density',
-															 					 'Info Density Chars', 'Corpus Size (log)',
-															 					 'Population (log)', 'Num Unique Words'))
+	labels = c('Semantic Density', 'Information Density',
+						 'Info Density Chars', 'Corpus Size (log)',
+						 'Population (log)', 'Num Unique Words'))
+
 cor_frame <- drop_na(cor_frame)
 
 ########################################################################
@@ -83,19 +84,18 @@ cor_frame <- drop_na(cor_frame)
 cor_plot <- cor_frame %>% 
   ggplot(aes(x = Variable_1, y = Variable_2, fill = Correlation)) +
   geom_tile(linewidth = 0.75, color = 'black') +
-  geom_text(aes(label = round(Correlation, digits= 2)), 
-  					) +
+  geom_text(aes(label = round(Correlation, digits= 2))) +
   theme_classic() +
   scale_fill_gradientn(colors = wes_palette('Zissou1', 100, type = 'continuous')) +
   scale_y_discrete(limits = rev) +
   theme(legend.position = 'none',
-        axis.title = element_blank(),
-        axis.text = element_text(face = 'bold',size=12),
-        axis.text.x = element_text(angle = 45,  vjust = 1, hjust = 1,size=12),
-  			plot.margin = unit(c(1, 1, 0.5, 1), 'cm'),
-  			axis.line = element_blank(),
-  			axis.ticks = element_blank()
-  			) 
+		axis.title = element_blank(),
+		axis.text = element_text(face = 'bold',size=12),
+		axis.text.x = element_text(angle = 45,  vjust = 1, hjust = 1,size=12),
+		plot.margin = unit(c(1, 1, 0.5, 1), 'cm'),
+		axis.line = element_blank(),
+		axis.ticks = element_blank()
+	) 
 
 ########################################################################
 #
@@ -124,22 +124,21 @@ coefs_m3 <- all_stats_m3 %>%
   select(estimate, statistic, term, conf.low, conf.high, typ) %>% 
   filter(term != '(Intercept)') %>% 
   mutate(term = str_remove_all(term, pattern = 'scale\\('),
-         term = str_remove_all(term, pattern = '\\)'),
-  			 line_stop = ifelse(estimate < 0, conf.high, conf.low),
-  			 line_stop = ifelse(0 > conf.low & 0 < conf.high, NA, line_stop),
-  			 statistic_text = str_c('t = ', round(statistic, digits = 2)),
-  			 position_text = ifelse(estimate < 0, -0.25, 0.25),
-  			 term = case_match(term,
-  			 									'log_pop_eth' ~ 'Population (log)',
-  			 									'totalMatches' ~ 'Total Matches',
-  			 									'semantic_density' ~ 'Semantic Density',
-  			 									'information_density' ~ 'Information Density',
-  			 									'numUniqueWords' ~ 'Num Unique Words',
-  			 									'meanDistanceBackMatch' ~ 'Avg Dist Back Match',
-  			 									'avgLengthMatch' ~ 'Avg Length Match',
-  			 									'semantic_density:log_pop_eth' ~ 'Semantic Density x Population (log)',
-  			 									'information_density:log_pop_eth' ~ 'Information Density x Population (log)'))
-
+		term = str_remove_all(term, pattern = '\\)'),
+		line_stop = ifelse(estimate < 0, conf.high, conf.low),
+		line_stop = ifelse(0 > conf.low & 0 < conf.high, NA, line_stop),
+		statistic_text = str_c('t = ', round(statistic, digits = 2)),
+		position_text = ifelse(estimate < 0, -0.25, 0.25),
+		term = case_match(term,
+ 			'log_pop_eth' ~ 'Population (log)',
+ 			'totalMatches' ~ 'Total Matches',
+ 			'semantic_density' ~ 'Semantic Density',
+ 			'information_density' ~ 'Information Density',
+ 			'numUniqueWords' ~ 'Num Unique Words',
+ 			'meanDistanceBackMatch' ~ 'Avg Dist Back Match',
+ 			'avgLengthMatch' ~ 'Avg Length Match',
+ 			'semantic_density:log_pop_eth' ~ 'Semantic Density x Population (log)',
+ 			'information_density:log_pop_eth' ~ 'Information Density x Population (log)'))
 
 ########################################################################
 #
@@ -159,14 +158,14 @@ coef_plot_info <- ggplot(coefs_m3, aes(x = estimate, y = term)) +
 	labs(x = 'Coefficient') + 
 	theme(
 		panel.grid.major = element_blank(),
-				panel.grid.minor = element_blank(), 
-				axis.title.y = element_blank(),
-				axis.text.y = element_text(face = 'bold', size=12),
-				axis.title.x = element_text(face = 'bold', size=12),
-				axis.text.x = element_text(face = 'bold', size=12),
-				plot.margin = unit(c(0.25, 0.5, 1, 0.5), 'cm'), 
-				legend.position = 'none'
-				)
+			panel.grid.minor = element_blank(), 
+			axis.title.y = element_blank(),
+			axis.text.y = element_text(face = 'bold', size=12),
+			axis.title.x = element_text(face = 'bold', size=12),
+			axis.text.x = element_text(face = 'bold', size=12),
+			plot.margin = unit(c(0.25, 0.5, 1, 0.5), 'cm'), 
+			legend.position = 'none'
+		)
 
 ########################################################################
 #
@@ -195,22 +194,22 @@ coefs_m3 <- all_stats_m3 %>%
 	select(estimate, statistic, term, conf.low, conf.high, typ) %>% 
 	filter(term != '(Intercept)') %>% 
 	mutate(term = str_remove_all(term, pattern = 'scale\\('),
-				 term = str_remove_all(term, pattern = '\\)'),
-				 line_stop = ifelse(estimate < 0, conf.high, conf.low),
-				 line_stop = ifelse(0 > conf.low & 0 < conf.high, NA, line_stop),
-				 statistic_text = str_c('t = ', round(statistic, digits = 2)),
-				 position_text = ifelse(estimate < 0, -0.25, 0.25),
-				 term = case_match(term,
-				 									'log_pop_eth' ~ 'Population (log)',
-				 									'totalMatches' ~ 'Total Matches',
-				 									'semantic_density' ~ 'Semantic Density',
-				 									'information_density' ~ 'Information Density',
-				 									'numUniqueWords' ~ 'Num Unique Words',
-				 									'meanDistanceBackMatch' ~ 'Avg Dist Back Match',
-				 									'avgLengthMatch' ~ 'Avg Length Match',
-				 									'semantic_density:log_pop_eth' ~ 'Semantic Density x Population (log)',
-				 									'information_density:log_pop_eth' ~ 'Information Density x Population (log)',
-				 									'numUniqueWords:log_pop_eth' ~ 'N. Unique Words x Population (log)'))
+		term = str_remove_all(term, pattern = '\\)'),
+		line_stop = ifelse(estimate < 0, conf.high, conf.low),
+		line_stop = ifelse(0 > conf.low & 0 < conf.high, NA, line_stop),
+		statistic_text = str_c('t = ', round(statistic, digits = 2)),
+		position_text = ifelse(estimate < 0, -0.25, 0.25),
+		term = case_match(term,
+	 		'log_pop_eth' ~ 'Population (log)',
+	 		'totalMatches' ~ 'Total Matches',
+	 		'semantic_density' ~ 'Semantic Density',
+	 		'information_density' ~ 'Information Density',
+	 		'numUniqueWords' ~ 'Num Unique Words',
+	 		'meanDistanceBackMatch' ~ 'Avg Dist Back Match',
+	 		'avgLengthMatch' ~ 'Avg Length Match',
+	 		'semantic_density:log_pop_eth' ~ 'Semantic Density x Population (log)',
+	 		'information_density:log_pop_eth' ~ 'Information Density x Population (log)',
+	 		'numUniqueWords:log_pop_eth' ~ 'N. Unique Words x Population (log)'))
 
 ########################################################################
 #
@@ -226,8 +225,6 @@ coef_plot_sem <- ggplot(coefs_m3, aes(x = estimate, y = term)) +
 	geom_vline(xintercept = 0) + 
 	geom_point(aes(shape=typ), size=3, color='orange', fill='orange', position=position_dodge(0.3)) + 
 	geom_errorbar(aes(xmin = conf.low, xmax = conf.high, group=typ), width=.2, position=position_dodge(0.3)) + 
-	#geom_segment(aes(x = 0, xend = line_stop), linetype = 'dotted') + 
-	#geom_text(aes(label = statistic_text, x = position_text), vjust = 2, fontface = 'bold') + 
 	theme_classic() +
 	labs(x = 'Coefficient') + 
 	theme(
@@ -249,6 +246,6 @@ coef_plot_sem <- ggplot(coefs_m3, aes(x = estimate, y = term)) +
 
 right_column_plot <- plot_grid(coef_plot_sem, coef_plot_info, ncol = 1)
 final_plot <- plot_grid(cor_plot, right_column_plot, ncol = 2, rel_widths = c(1, .75))
-ggsave(filename = 'plot_panel.png', plot = final_plot, 
-			 width = 12, height = 6, units = 'in', dpi = 500, bg = 'white')
+ggsave(filename = 'plot_panel.pdf', plot = final_plot, 
+	 width = 12, height = 6, units = 'in', dpi = 500, bg = 'white')
 
